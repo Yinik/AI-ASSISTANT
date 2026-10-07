@@ -104,8 +104,9 @@ npx serve -l 8080
 
 | 项 | 值 |
 |---|---|
-| 最终 Git SHA | `见提交后填写（git rev-parse HEAD）` |
-| 提交时间 | `见提交时填写` |
+| 内容版本 SHA（首版交付提交） | `6c5ca9e3c3759d74531b9d6e767c507bc9c99c14` |
+| 本仓库 HEAD | 以 `git rev-parse HEAD` 为准（= 网页端确认时填写的值） |
+| 提交时间 | 2026-10-07 11:3x（GMT+8） |
 | 分支 | `main` |
 | 运行命令 | `docker compose up --build` |
 | 演示访问地址 | `http://localhost:8080` |
