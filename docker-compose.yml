@@ -1,0 +1,17 @@
+services:
+  prototype:
+    build: .
+    image: anan-elder-prototype:1.0.0
+    container_name: anan-elder-prototype
+    ports:
+      # 宿主机端口:容器端口 —— 若 8080 被占用，把左边改成 8081 等即可
+      - "8080:80"
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      start_period: 3s
+      retries: 5

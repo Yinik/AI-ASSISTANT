@@ -1,0 +1,13 @@
+# 依赖与本地环境
+node_modules/
+npm-debug.log*
+*.log
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 生成过程中的临时文件（PDF 与 PNG 是交付物，需保留）
+prototype-images/_pdf.html
