@@ -59,13 +59,19 @@ function seedFor(r) {
   const S = Store.state;
   const id = r.id || 'med-evening';
 
-  /* E1 / E2 展示"尚未建立协作"的空状态；其余页面默认已建立协作 */
-  if (r.key !== '/elder/first' && r.key !== '/elder/link') S.linked = true;
+  /* E1 / E2 展示"尚未建立协作"的空状态；其余页面默认已建立协作。
+     但老人已经明确拒绝过（linkDecision === 'declined'）时，不得再自动连上 —— 权限由老人决定。 */
   if (r.key === '/elder/first' || r.key === '/elder/link') return;
+  if (S.linkDecision === null) S.linked = true;
+  else S.linked = (S.linkDecision === 'linked');
 
   /* 家属端首页可以直接看"有异常"的样子： #/family/home?alert=med-evening */
   if (r.key === '/family/home' && r.params.alert && !Store.requestOf(r.params.alert)) {
     Store.askHelp(r.params.alert, r.params.alert === 'med-evening' ? 'system' : 'elder');
+  }
+  /* 家属端确认"妈妈想加的事"： #/family/review?src=elder */
+  if (r.key === '/family/review' && r.params.src === 'elder' && !S.elderAdd) {
+    Store.addElderRequest();
   }
   if (r.key === '/elder/waiting' || r.key === '/elder/reply' || r.key === '/elder/noreply' ||
       r.key === '/family/request' || r.key === '/family/reply' || r.key === '/family/withdrawn') {
@@ -129,6 +135,16 @@ function render() {
   document.getElementById('app').innerHTML = html;
   document.getElementById('phone').classList.toggle('is-xlarge', S.fontSize === 'xlarge');
 
+  /* E17「怎么用」弹窗：挂在 .phone 层级，避免被 .screen 的滚动裁切；离开该页时移除 */
+  const helpEl = document.getElementById('helpmodal');
+  if (helpEl) helpEl.remove();
+  if (S.helpOpen && r.key === '/elder/settings') {
+    const holder = document.createElement('div');
+    holder.innerHTML = helpModal();
+    holder.firstElementChild.id = 'helpmodal';
+    document.getElementById('phone').appendChild(holder.firstElementChild);
+  }
+
   /* 底部说明：编号 / 名称 / 角色 / 路由 */
   const meta = ROUTE_META[r.key] || ['—', '—'];
   const roleName = r.role === 'family' ? '家属端（女儿）' : '老人端（张阿姨）';
@@ -183,6 +199,12 @@ function A(action, a, b) {
     /* 建立协作 */
     case 'linkFamily': Store.linkFamily(); go('#/elder/home'); break;
 
+    /* 老人拒绝建立协作（E1「我自己来」/ E2「先不连」）——保持未连接 */
+    case 'declineLink':
+      Store.declineLink();
+      go('#/elder/home');
+      break;
+
     /* 完成事务 */
     case 'complete':
       Store.completeTask(a, 'button');
@@ -212,18 +234,18 @@ function A(action, a, b) {
       break;
     }
 
-    /* 取消 */
+    /* 取消（Store.cancelTask 会把未回应的求助一并撤回，保证两端状态一致） */
     case 'cancelTask': {
       const [id, kind] = a.split('|');
+      const hadRequest = !!(Store.requestOf(id) && Store.requestOf(id).status === 'waiting');
       Store.cancelTask(id, kind);
-      go('#/elder/home');
+      go('#/elder/home?skipped=' + id + (hadRequest ? '&req=1' : ''));
       break;
     }
 
     /* 求助 */
     case 'withdrawHelpAndHome':
       Store.withdrawHelp(a);
-      S.lastWithdrawn = null;
       go('#/elder/home?cancelled=' + a);
       break;
     case 'callFamily':
@@ -250,9 +272,34 @@ function A(action, a, b) {
 
     /* 老人端添加事务 */
     case 'addAskFamily':
-      Store.log({ icon: '➕', text: '张阿姨说想加「每周四上午去社区医院量血压」，已转给女儿录入', kind: 'info' });
+      Store.addElderRequest();
       S.toast = '已经告诉女儿了，她确认一下就会开始提醒你。';
       go('#/elder/home');
+      break;
+
+    /* 家属确认老人想加的事 → 老人端出现新待办 */
+    case 'confirmElderAdd':
+      Store.confirmElderAdd();
+      S.toast = '已发给妈妈，她那边现在能看到这条了。';
+      go('#/family/home');
+      break;
+
+    /* 家属往「妈妈的话」里加一条说法（需要先在输入框里填） */
+    case 'addPhrase': {
+      const row = Store.addPhrase(S.phraseDraft);
+      S.toast = row ? `已加进「妈妈的话」：${row.k}` : '先在框里填一句妈妈常说的话。';
+      render();
+      break;
+    }
+
+    /* E17 看图说明（弹窗） */
+    case 'helpDoc': S.helpOpen = true; render(); break;
+    case 'closeHelp': S.helpOpen = false; render(); break;
+
+    /* F4 播放妈妈的语音留言（原型模拟） */
+    case 'playVoice':
+      S.toast = '正在播放妈妈的语音…（原型模拟，没有真实录音）';
+      render();
       break;
 
     /* 设置 */
@@ -309,6 +356,16 @@ function A(action, a, b) {
     case 'pickOption':
       go('#/family/review?manual=2');
       break;
+    /* 家属纠正"妈妈想加的事"的识别结果 */
+    case 'pickElderOption': {
+      const [f, v] = a.split('|');
+      if (S.elderAdd) {
+        if (f === 'time') S.elderAdd.time = v; else S.elderAdd.title = v;
+        S.elderAdd.confirmed = false;
+      }
+      go('#/family/review?src=elder');
+      break;
+    }
     case 'confirmAdd':
       Store.addMarketTask();
       S.toast = '已发给妈妈，她那边现在能看到这条了。';

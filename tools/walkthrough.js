@@ -105,6 +105,19 @@ function section(title) {
       { waitUntil: 'networkidle0' });
     await sleep(220);
   };
+  /* 页内跳转（保留内存态）：验证"同一会话里状态是否一致"必须用它 */
+  const navTo = async (hash) => {
+    await page.evaluate((h) => { location.hash = h; }, hash);
+    await sleep(260);
+  };
+  const store = () => page.evaluate(() => JSON.parse(JSON.stringify({
+    linked: Store.state.linked,
+    share: Store.state.share,
+    req: Store.state.requests['med-evening'] || null,
+    task: (Store.state.tasks.find((t) => t.id === 'med-evening') || {}).status,
+    elderAdd: Store.state.elderAdd,
+    phrases: Store.state.phrases.length,
+  })));
 
   /* 建立协作：E1 → E2 → E3 */
   const boot = async () => {
@@ -235,13 +248,14 @@ function section(title) {
   /* 全路由可达性：编号清单里的每一项都应有画面 */
   const routes = [
     '#/elder/first', '#/elder/link', '#/elder/home', '#/elder/task/parcel',
-    '#/elder/confirm/med-evening', '#/elder/voice/med-evening', '#/elder/fix/med-evening',
-    '#/elder/add', '#/elder/canceltask/med-evening', '#/elder/ask/med-evening',
+    '#/elder/confirm/med-evening', '#/elder/voice/med-evening', '#/elder/voice/med-evening?step=result', '#/elder/fix/med-evening',
+    '#/elder/add', '#/elder/add?step=result', '#/elder/canceltask/med-evening', '#/elder/ask/med-evening',
     '#/elder/waiting/med-evening', '#/elder/reply/med-evening', '#/elder/noreply/med-evening',
     '#/elder/approve', '#/elder/error/med-evening', '#/elder/history', '#/elder/history?empty=1',
-    '#/elder/settings', '#/family/home', '#/family/add', '#/family/review',
+    '#/elder/settings', '#/family/home',     '#/family/home?alert=med-evening', '#/family/add',
+    '#/family/review', '#/family/review?manual=2', '#/family/review?src=elder',
     '#/family/request/med-evening', '#/family/reply/med-evening', '#/family/fix',
-    '#/family/log', '#/family/log?empty=1', '#/family/withdrawn/med-evening', '#/family/sharing',
+    '#/family/fix?f=time&src=elder', '#/family/log', '#/family/log?empty=1', '#/family/withdrawn/med-evening', '#/family/sharing',
   ];
   let routeBad = 0;
   for (const r of routes) {
@@ -252,6 +266,94 @@ function section(title) {
   check('27 个页面 / 状态路由全部有画面（含 ?empty=1 等变体）', routeBad === 0, routeBad + ' 条异常');
 
   check('全程无 JavaScript 报错', jsErrors.length === 0, jsErrors.slice(0, 2).join(' | '));
+
+  /* ============================================================ 路径 6 */
+  section('【路径 6】权限与状态一致性（拒绝协作 / 共享关闭 / 取消联动撤回 / 添加闭环）');
+
+  /* 6a 拒绝授权必须真的保持未连接 */
+  await goto('#/elder/first');
+  check('E1 点「我自己来，先看看」', await clickTxt('我自己来'));
+  check('拒绝后 linked = false', (await store()).linked === false, JSON.stringify(await store()));
+  check('E3 显示「还没连上女儿」并可补连', /还没连上女儿/.test(await body()) && /让女儿连上/.test(await body()));
+  await demo('张莉');
+  check('未建立协作时家属端不显示妈妈事务', !/吃降压药/.test(await body()));
+  check('未建立协作时家属端显示「还没有和妈妈连上」', /还没有和妈妈连上/.test(await body()));
+  await demo('张阿姨');
+  await clickTxt('让女儿连上'); await clickTxt('同意连上');
+  check('补连后 linked = true', (await store()).linked === true);
+
+  /* 6b 取消事务时，未回应的求助一并撤回 */
+  await boot();
+  await toE5();
+  await clickOn('#/elder/ask/med-evening'); await clickTxt('告诉她');
+  check('求助已发出（waiting）', (await store()).req.status === 'waiting');
+  await navTo('#/elder/task/med-evening'); await navTo('#/elder/canceltask/med-evening');
+  check('E9 明确说明求助会一并撤回', /一并撤回/.test(await body()));
+  await clickTxt('今天先不做');
+  const s6b = await store();
+  check('事务变成 skipped', s6b.task === 'skipped', JSON.stringify(s6b));
+  check('求助同步变成 withdrawn', s6b.req && s6b.req.status === 'withdrawn', JSON.stringify(s6b.req));
+  await demo('张莉');
+  const f6b = await body();
+  check('家属端不再显示「妈妈找你帮忙」', !/妈妈找你帮忙/.test(f6b), f6b.slice(0, 70));
+  check('家属端显示「妈妈撤回了求助」', /撤回了求助/.test(f6b));
+  check('家属端首页存在指向 F8 的入口', /withdrawn/.test(await page.$eval('#app', (e) => e.innerHTML)));
+  check('点横幅进入 F8', await clickOn('#/family/withdrawn/med-evening') && (await cap()).includes('F8'), await cap());
+
+  /* 6c 共享开关对家属端实时生效 */
+  await goto('#/elder/settings');
+  await page.evaluate(() => { A('toggleShare', 'status'); A('toggleShare', 'history'); A('toggleShare', 'editTime'); });
+  const s6c = (await store()).share;
+  check('三项共享均已关闭', s6c.status === false && s6c.history === false && s6c.editTime === 'off', JSON.stringify(s6c));
+  await demo('张莉');
+  check('F1 不再列出妈妈事务，改为说明文字', !/吃降压药/.test(await body()) && /没有开放/.test(await body()));
+  await navTo('#/family/log');
+  check('F7 不再显示一周趋势与建议', !/妈妈这一周/.test(await body()) && /没有开放/.test(await body()));
+  await navTo('#/family/reply/med-evening');
+  check('F5 不再出现改期入口', !/帮她改提醒时间/.test(await body()));
+  await navTo('#/family/sharing');
+  check('F9 权限清单显示「已关闭」', /已关闭/.test(await body()));
+
+  /* 6d 老人发起添加 → 家属确认 → 老人端生效 */
+  await goto('#/elder/first');
+  await clickTxt('让女儿帮我安排'); await clickTxt('同意连上');
+  await clickTxt('我想加一件事');
+  await page.evaluate(() => { const m = document.querySelector('#app .mic'); if (m) m.click(); });
+  await sleep(300);
+  await clickTxt('对，就是这个');
+  await demo('张莉');
+  check('家属端首页出现「妈妈想加一件事」', /妈妈想加一件事/.test(await body()));
+  check('进入 F3（src=elder）显示妈妈原话', await clickOn('#/family/review?src=elder') && /妈妈的原话/.test(await body()));
+  await clickTxt('确认无误，发给妈妈');
+  check('确认后老人端任务列表新增 clinic',
+    await page.evaluate(() => Store.state.tasks.some((t) => t.id === 'clinic' && t.title === '去社区医院量血压')));
+  await demo('张阿姨');
+  check('老人端首页出现新待办', /去社区医院量血压/.test(await body()));
+
+  /* 6e 家属补充「妈妈的话」 */
+  await goto('#/family/log');
+  const nBefore = (await store()).phrases;
+  await page.type('#app .inp', '弄妥了');
+  await clickTxt('加进去');
+  check('「妈妈的话」新增一条', (await store()).phrases === nBefore + 1, nBefore + ' -> ' + (await store()).phrases);
+  check('列表出现新说法', /弄妥了/.test(await body()));
+
+  /* 6f F4 语音可点、E17 帮助弹窗 */
+  await goto('#/family/request/med-evening');
+  check('F4「▶ 点这里听」可点击', await clickTxt('点这里听'));
+  check('F4 点击后给出播放提示', /播放妈妈的语音/.test(await page.evaluate(() => document.querySelector('#phone').innerText)));
+  await goto('#/elder/settings');
+  check('E17「怎么用」打开弹窗', await clickTxt('怎么用') && !!(await page.$('#helpmodal')));
+  check('弹窗含 4 步说明', await page.evaluate(() => document.querySelectorAll('#helpmodal .modal__step').length === 4));
+  await page.evaluate(() => A('closeHelp')); await sleep(220);
+  check('关闭后弹窗移除', !(await page.$('#helpmodal')));
+
+  /* 6g 控制条 ③⑧ 直达 */
+  await goto('#/elder/home');
+  check('控制条 ③ 直达"识别有误"复述画面', await demo('③ 识别有误') && /对不对|我听到的是/.test(await body()));
+  check('控制条 ⑧ 直达女儿语音录入（自动推进）', await demo('⑧ 女儿语音录入'));
+  await sleep(1500);
+  check('⑧ 1.2 秒后自动给出识别结果', /识别结果|每周二/.test(await body()));
 
   /* ============================================================ 汇总 */
   console.log('\n' + '='.repeat(60));

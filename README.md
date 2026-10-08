@@ -312,7 +312,7 @@ AI 识别结果不会直接写入状态，必须经过老人确认。
 4. 老人与家属之间的协作流程
 
 实际走查结论与缺陷修复记录见 [`docs/04-走查记录.md`](docs/04-走查记录.md)；
-可用 [`tools/walkthrough.js`](tools/walkthrough.js) 自行复现（真实点击式自动走查，57 项断言）。
+可用 [`tools/walkthrough.js`](tools/walkthrough.js) 自行复现（真实点击式自动走查，90 项断言）。
 
 ---
 
@@ -412,7 +412,7 @@ curl -I http://localhost:8080
 curl -o /dev/null -w "%{http_code}\n" http://localhost:8080/css/app.css
 curl -o /dev/null -w "%{http_code}\n" http://localhost:8080/js/app.js
 
-# 4. 自动走查（可选，需要 Node + Chrome；真实点击页面，57 项断言）
+# 4. 自动走查（可选，需要 Node + Chrome；真实点击页面，90 项断言）
 cd tools && npm install && node walkthrough.js
 ```
 
@@ -483,7 +483,7 @@ cd tools && npm install && node walkthrough.js
 │   ├── 31_F9_家属端_共享与权限.png
 │   └── 安安-原型图.pdf
 ├── tools/                   # 走查脚本（开发用，不参与原型运行）
-│   ├── walkthrough.js       # 真实点击式自动走查：57 项断言
+│   ├── walkthrough.js       # 真实点击式自动走查：90 项断言
 │   └── README.md            # 怎么跑走查
 ├── Dockerfile
 ├── docker-compose.yml
@@ -521,6 +521,7 @@ cd tools && npm install && node walkthrough.js
 |---|---|
 | 2026-10-07 | 首版交付（`6c5ca9e`）：可操作原型 E1–E17 / F1–F9、四份文档、32 张编号原型图 + PDF、竞品证据、Docker 三件套 |
 | 2026-10-08 | 补回老人端"女儿已经回话了"回执联动（此前改在本地、未提交）；走查脚本入库 `tools/`；原型图 PDF 去重（37 → 28 页）并按编号补书签；修正页面清单中失效的直达路由（`med` → `med-evening`）与页面数（25 → 26）；补 `docker compose up --build` 真机实测记录 |
+| 2026-10-08（晚） | **修复 8 处状态/一致性问题**：① 取消事务时未回应的求助一并撤回（原来家属端仍显示"妈妈找你帮忙"）② 老人拒绝授权不再被覆盖（原来"先不连"后家属端仍能看到全部事务）③ 共享开关对家属端实时生效（F1 / F7 / F5）④ F8 撤回页在流程内可达 ⑤ 老人发起添加形成闭环（E8 → F3 → 老人端新待办）⑥ 家属端「记录」新增来自真实操作的动态、可补充"妈妈的话" ⑦ F4 语音可点、E17 帮助改为完整弹窗 ⑧ 控制条 ③⑧ 真正直达。走查断言 57 → **90 项**；原型图 32 → **38 张**（新增 S18–S21），PDF 重排为 37 页 |
 
 ---
 

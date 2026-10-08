@@ -20,7 +20,7 @@ function E1_first() {
         </div>
         <div class="note note--info">第一次用，可以让女儿先帮你在外地安排好，你这边只要听提醒、说话回我就行。</div>
         ${btn('让女儿帮我安排', 'go', '#/elder/link', 'btn--primary')}
-        ${btn('我自己来，先看看', 'go', '#/elder/home', 'btn--ghost')}
+        ${btn('我自己来，先看看', 'declineLink', null, 'btn--ghost')}
       </div>
       ${demoTag('S1 首次建立协作 · 空状态（还没有任何待办、还没连女儿）')}`
   });
@@ -41,7 +41,7 @@ function E2_link() {
           <b>女儿看不到：</b>你在哪儿、你的电话和短信、你手机里别的软件。
         </div>
         ${btn('同意连上', 'linkFamily', null, 'btn--primary')}
-        ${btn('先不连', 'go', '#/elder/home', 'btn--ghost')}
+        ${btn('先不连', 'declineLink', null, 'btn--ghost')}
       </div>
       ${demoTag('S1 关系确认与授权 · 明确写出女儿能看到什么、看不到什么')}`
   });
@@ -54,12 +54,18 @@ function E3_home(params) {
   const done = Store.doneCount();
   const doneId = params.done ? Store.task(params.done) : null;
   const cancelledId = params.cancelled ? Store.task(params.cancelled) : null;
+  const skippedId = params.skipped ? Store.task(params.skipped) : null;
+  const elderAdd = Store.state.elderAdd;
 
   let banner = '';
   if (doneId) {
     banner = `<div class="note note--ok"><b>记上了。</b>「${esc(doneId.title)}」算做完了，女儿那边看得到。</div>`;
+  } else if (skippedId) {
+    banner = `<div class="note note--warn"><b>好，今天先不做。</b>「${esc(skippedId.title)}」已经改成${skippedId.skipReason === 'postpone' ? '改天再做' : '今天不做'}，女儿那边也看得到${params.req ? '，之前的求助也一并撤回来了' : ''}，她不会再问你。</div>`;
   } else if (cancelledId) {
     banner = `<div class="note note--warn"><b>已经跟女儿说了。</b>「${esc(cancelledId.title)}」的求助撤回来了，她那边会显示已撤回。</div>`;
+  } else if (elderAdd && !elderAdd.confirmed) {
+    banner = `<div class="note note--info"><b>你想加的「${esc(elderAdd.title)}」已经告诉女儿了。</b>她确认一下，这里就会出现这条。</div>`;
   } else if (Store.state.pendingEditTime) {
     const p = Store.state.pendingEditTime;
     banner = `<button type="button" class="card card--info" style="text-align:left" onclick="A('go','#/elder/approve')">
@@ -74,7 +80,8 @@ function E3_home(params) {
       <div class="card__meta">「${esc(t.title)}」${esc(r.reply && r.reply.text || '')} ›</div>
     </button>`;
   } else if (!Store.state.linked) {
-    banner = `<div class="note note--warn">还没连上女儿。连上以后，你一个人搞不定的时候才能叫她。</div>`;
+    banner = `<div class="note note--warn"><b>还没连上女儿。</b>连上以后，你一个人搞不定的时候才能叫她；她只能看到你同意的那些。
+      <div style="margin-top:14px">${btn('让女儿连上', 'go', '#/elder/link', 'btn--ghost')}</div></div>`;
   }
 
   return phonePage({
@@ -86,7 +93,9 @@ function E3_home(params) {
         ${tasks.map(elderTaskCard).join('')}
         ${btn('➕ 我想加一件事', 'go', '#/elder/add', 'btn--ghost')}
       </div>
-      ${demoTag('S2 正常有数据 · 早上那顿已完成，其余待办；截止型事务单独标「今天到期」')}`
+      ${demoTag(Store.state.linked
+        ? 'S2 正常有数据 · 早上那顿已完成，其余待办；截止型事务单独标「今天到期」'
+        : '未建立协作 · 老人拒绝了连接，家属端此时看不到任何内容（S18）')}`
   });
 }
 
@@ -298,16 +307,19 @@ function E8_add(params) {
 /* ------------------------------------------------------------------ E9 */
 function E9_canceltask(id) {
   const t = Store.task(id);
+  const r = Store.requestOf(id);
+  const willWithdraw = !!(r && r.status === 'waiting');
   return phonePage({
     role: 'elder', title: '这件事今天不做了？', sub: esc(t.title), back: '#/elder/home', lined: true,
     body: `
       <div class="stack">
-        <div class="note note--warn">不做也可以。我会告诉女儿，她那边会看到「今天不做」，不会一直问你。</div>
+        <div class="note note--warn">不做也可以。我会告诉女儿，她那边会看到「今天不做」，不会一直问你。
+          ${willWithdraw ? '<br /><b>之前发出去的求助也会一并撤回来，她那边不会再收到。</b>' : ''}</div>
         ${btn('今天先不做', 'cancelTask', id + '|skip', 'btn--warn')}
         ${btn('改天再做', 'cancelTask', id + '|postpone', 'btn--warn')}
         ${btn('算了，我还是做吧', 'go', '#/elder/task/' + id, 'btn--ghost')}
       </div>
-      ${demoTag('S9 取消操作 · 取消后家属端显示"今天不做"，不再追问，也不显示成功')}`
+      ${demoTag('S9 取消操作 · 取消后家属端显示"今天不做"；若求助还在等待，会一并撤回，两端状态一致')}`
   });
 }
 
@@ -518,6 +530,32 @@ function E16_history(params) {
 }
 
 /* ------------------------------------------------------------------ E17 */
+/* 「怎么用」看图说明：用弹窗呈现（考核允许抽屉/弹窗，但内容必须完整） */
+const HELP_STEPS = [
+  { i: '🔔', t: '到点我会喊你', d: '你听我说是什么事就行，不用你自己找。' },
+  { i: '✅', t: '做完了告诉我', d: '按绿色的大按钮，或者说一句"我吃过了"，我听懂了会跟你确认一遍。' },
+  { i: '🙋', t: '搞不定就叫女儿', d: '按"叫女儿帮忙"，我会把这件事告诉她；她回话了你这边会响。' },
+  { i: '🔒', t: '她能看什么你说了算', d: '在"设置"里逐项开关；关掉马上生效，她那边就看不到了。' }
+];
+function helpModal() {
+  return `
+    <div class="modal" role="dialog" aria-modal="true" aria-label="怎么用">
+      <div class="modal__card">
+        <div class="modal__t">📖 怎么用</div>
+        <div class="modal__steps">
+          ${HELP_STEPS.map((s, i) => `
+            <div class="modal__step">
+              <span class="modal__no">${i + 1}</span>
+              <span class="modal__ic">${s.i}</span>
+              <span class="modal__tx"><b>${s.t}</b><br />${s.d}</span>
+            </div>`).join('')}
+        </div>
+        <div class="note note--info">这一页随时可以关掉。哪一步不会了，回到这里再看一遍就行。</div>
+        ${btn('我知道了', 'closeHelp', null, 'btn--primary')}
+      </div>
+    </div>`;
+}
+
 function E17_settings() {
   const s = Store.state;
   const sw = (on, action, arg) => `<button type="button" class="sw ${on ? 'is-on' : ''}" onclick="A('${action}'${arg ? ",'" + arg + "'" : ''})" aria-label="开关"></button>`;
@@ -554,12 +592,12 @@ function E17_settings() {
               ${sw(s.share[it.k], 'toggleShare', it.k)}
             </div>`).join('')}
         </div>
-        <div class="note">不想让她看就关掉，关掉马上生效。你想让她看再打开。</div>
+        <div class="note">不想让她看就关掉，关掉马上生效，她那边立刻看不到。你想让她看再打开。</div>
 
         <div class="section-label">需要帮忙</div>
         ${btn('🙋 找女儿帮忙', 'go', '#/elder/ask/med-evening', 'btn--ghost')}
         ${btn('📖 怎么用（看图说明）', 'helpDoc', null, 'btn--ghost')}
       </div>
-      ${demoTag('共享权限由老人自己控制，逐项可关；关掉即时生效')}`
+      ${demoTag('共享权限由老人自己控制，逐项可关，关掉后家属端立即看不到对应内容；「怎么用」用弹窗呈现完整说明')}`
   });
 }

@@ -1,7 +1,7 @@
 /* ==========================================================================
    安安 · 独居老人生活事务提醒与家人协作 —— 原型样式
    设计基线：手机 390 × 844（逻辑像素）
-   老人端：正文 ≥ 28px、对比度 ≥ 4.5:1、主按钮高度 ≥ 72px、无键盘输入
+   老人端：正文 ≥ 28px、对比度 ≥ 4.5:1、主按钮高度 ≥ 78px、无键盘输入
    家属端：常规信息密度（基准 16px）
    ========================================================================== */
 
@@ -539,6 +539,50 @@ button.card:hover { border-color: var(--line-strong); background: #FFFDFB; }
   text-align: center;
   line-height: 1.5;
 }
+
+/* --------------------------------------------------------------- 弹窗（E17 看图说明） */
+.modal {
+  position: absolute; inset: 0; z-index: 30;
+  background: rgba(26, 22, 20, .42);
+  display: flex; align-items: flex-end;
+  padding: 14px;
+}
+.modal__card {
+  background: var(--bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--line);
+  padding: 22px 20px 20px;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.modal__t { font-weight: 700; font-size: 26px; margin-bottom: 16px; }
+.modal__steps { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+.modal__step {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 16px;
+}
+.modal__no {
+  flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--primary); color: #fff; font-weight: 700; font-size: 19px;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal__ic { flex: 0 0 auto; font-size: 30px; line-height: 1.2; }
+.modal__tx { font-size: 21px; line-height: 1.45; color: var(--ink-2); }
+.modal__tx b { color: var(--ink); font-size: 23px; }
+
+/* --------------------------------------------------------------- 输入行（家属端补充说法） */
+.inputrow { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+.inp {
+  flex: 1 1 auto; min-width: 0;
+  font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong); border-radius: 10px;
+  padding: 10px 12px;
+}
+.inp:focus { outline: 2px solid var(--info); outline-offset: 1px; border-color: var(--info); }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; overflow: hidden;

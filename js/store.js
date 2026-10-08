@@ -13,6 +13,16 @@ function initialState() {
     fontSize: 'normal',     // 'normal' | 'xlarge'（设置页可切换）
     voiceOn: true,          // 语音播报开关
     linked: false,          // 是否已建立家庭协作（E1/E2）
+    linkDecision: null,     // null=老人还没选 / 'linked'=同意连上 / 'declined'=老人拒绝连上
+                            // 拒绝后不得再被自动置为已连接（权限由老人自己决定）
+    helpOpen: false,        // E17「怎么用」看图说明弹窗
+    elderAdd: null,         // 老人用语音说想加的事，等家属确认：{quote,title,time,repeat}
+    phrases: [              // 「妈妈的话」——帮 AI 听懂她的常用说法（家属端可增补）
+      { k: '「吃了」', v: '= 已完成' },
+      { k: '「弄好了」', v: '= 已完成' },
+      { k: '「还没顾上」', v: '= 未完成' }
+    ],
+    phraseDraft: '',        // 「妈妈的话」输入框草稿
     share: {                // 老人端授予女儿的权限（E17 可改）
       status: true,         // 看今天做没做
       history: true,        // 看一周记录
@@ -103,7 +113,16 @@ const Store = {
 
   linkFamily() {
     this.state.linked = true;
+    this.state.linkDecision = 'linked';
+    this.state.helpOpen = false;
     this.log({ icon: '🔗', text: '张阿姨同意让女儿连上，可以看到「今天做没做」和「一周记录」' });
+  },
+
+  /* 老人拒绝建立协作（E1「我自己来」/ E2「先不连」）——必须真的保持未连接 */
+  declineLink() {
+    this.state.linked = false;
+    this.state.linkDecision = 'declined';
+    this.state.helpOpen = false;
   },
 
   completeTask(id, via) {
@@ -119,11 +138,20 @@ const Store = {
     });
   },
 
+  /* 老人取消事务：如果这件事已经求助女儿且还没人回应，求助一并撤回，
+     否则家属端会一直挂着"妈妈找你帮忙"的红色横幅（状态不一致）。 */
   cancelTask(id, reason) {
     const t = this.task(id);
+    const r = this.state.requests[id];
+    if (r && r.status === 'waiting') this.withdrawHelp(id);
     t.status = 'skipped';
     t.skipReason = reason;
-    this.log({ icon: '⏭️', text: `张阿姨把「${t.title}」改成${reason === 'postpone' ? '改天再做' : '今天先不做'}`, kind: 'warn' });
+    this.log({
+      icon: '⏭️',
+      text: `张阿姨把「${t.title}」改成${reason === 'postpone' ? '改天再做' : '今天先不做'}`
+        + (r && r.status === 'withdrawn' ? '，求助也一并撤回了' : ''),
+      kind: 'warn'
+    });
   },
 
   askHelp(id, from) {
@@ -149,8 +177,10 @@ const Store = {
   withdrawHelp(id) {
     const r = this.state.requests[id];
     if (!r) return;
-    r.status = 'withdrawn';
+    if (r.status === 'waiting') r.status = 'withdrawn';
     r.withdrawnAt = '刚刚';
+    /* 家属端首页要用它显示"妈妈撤回了求助"横幅（F8 的流程内入口） */
+    this.state.lastWithdrawn = id;
     this.log({ icon: '↩️', text: `张阿姨撤回了「${this.task(id).title}」的求助`, kind: 'warn' });
   },
 
@@ -199,6 +229,44 @@ const Store = {
       detail: '每周二上午九点半去买菜。菜市场离家 400 米，走着去。'
     });
     this.log({ icon: '➕', text: '女儿录入新事务「每周二上午 09:30 去菜市场买菜」，张阿姨那边已经能看到' , kind: 'info' });
+  },
+
+  /* 老人用语音说想加一件事（E8）——先挂起，等家属确认才真正生效 */
+  addElderRequest() {
+    if (this.state.elderAdd) return;
+    this.state.elderAdd = {
+      quote: '每个礼拜四上午去社区医院量血压',
+      title: '去社区医院量血压',
+      time: '每周四上午',
+      repeat: '每周四重复'
+    };
+    this.log({ icon: '➕', text: '张阿姨说想加「每周四上午去社区医院量血压」，等女儿确认', kind: 'info' });
+  },
+
+  /* 家属确认老人想加的事 → 老人端真的出现这条待办 */
+  confirmElderAdd() {
+    const e = this.state.elderAdd;
+    if (!e || e.confirmed) return;
+    e.confirmed = true;
+    this.state.tasks.push({
+      id: 'clinic', sortKey: 940, timeLabel: '周四 09:00',
+      title: e.title, type: 'weekly',
+      status: 'todo', doneAt: null, doneVia: null,
+      note: '女儿帮你记的：' + e.time, deadline: null,
+      detail: e.time + '九点去社区医院量血压。带上医保卡，量完记得看一眼数字。'
+    });
+    this.log({ icon: '✅', text: `女儿确认了张阿姨想加的事「${e.title}」，老人端已出现这条待办`, kind: 'ok' });
+  },
+
+  /* 家属往「妈妈的话」里加一条说法 */
+  addPhrase(text) {
+    const t = String(text || '').trim();
+    if (!t) return null;
+    const row = { k: '「' + t + '」', v: '= 由女儿补充' };
+    this.state.phrases.push(row);
+    this.state.phraseDraft = '';
+    this.log({ icon: '💬', text: `女儿补充了妈妈的说法「${t}」`, kind: 'info' });
+    return row;
   },
 
   /* 演示：让一条事务超时未确认 */
