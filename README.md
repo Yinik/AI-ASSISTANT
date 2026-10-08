@@ -75,6 +75,10 @@ npx serve -l 8080
 | 竞品体验证据（2 个产品 × 关键页面截图） | [`docs/evidence/`](docs/evidence/) |
 | 可操作 Web 原型 + 可编辑源码 | 本仓库根目录（`index.html` / `css/` / `js/`） |
 | Dockerfile / docker-compose.yml / README | 本仓库根目录 |
+| 走查脚本（可选，供评审自行复现走查结论） | [`tools/walkthrough.js`](tools/walkthrough.js) |
+
+> `tools/` 只是开发期的验证工具，**不参与原型运行**：原型本身零依赖、无构建步骤。
+> 评审演示只需要 Docker（或任意静态服务器）。
 
 ---
 
@@ -92,6 +96,9 @@ npx serve -l 8080
 │   └── app.js               # 路由、动作分发、演示控制条
 ├── docs/                    # 产品说明 / 页面清单 / 演示说明 / 走查记录 / 竞品证据
 ├── prototype-images/        # 完整原型图（编号图片目录 + PDF）
+├── tools/                   # 走查脚本（开发用，不参与原型运行）
+│   ├── walkthrough.js       # 真实点击式自动走查：57 项断言，对应 docs/04 的四条路径
+│   └── README.md            # 怎么跑走查
 ├── Dockerfile
 ├── docker-compose.yml
 ├── nginx.conf
@@ -105,12 +112,19 @@ npx serve -l 8080
 | 项 | 值 |
 |---|---|
 | 内容版本 SHA（首版交付提交） | `6c5ca9e3c3759d74531b9d6e767c507bc9c99c14` |
+| 首版交付时间 | 2026-10-07 13:20（GMT+8） |
 | 本仓库 HEAD | 以 `git rev-parse HEAD` 为准（= 网页端确认时填写的值） |
-| 提交时间 | 2026-10-07 13:20（GMT+8） |
 | 分支 | `main` |
 | 运行命令 | `docker compose up --build` |
 | 演示访问地址 | `http://localhost:8080` |
 | 初始状态恢复方法 | 点演示控制条「↺ 恢复初始状态」，或刷新浏览器 |
+
+### 修订记录
+
+| 日期 | 内容 |
+|---|---|
+| 2026-10-07 | 首版交付（`6c5ca9e`）：可操作原型 E1–E17 / F1–F9、四份文档、32 张编号原型图 + PDF、竞品证据、Docker 三件套 |
+| 2026-10-08 | 补回老人端「女儿已经回话了」回执联动（此前改在本地、未提交）；走查脚本入库 `tools/`；修正页面清单中失效的直达路由（`med` → `med-evening`）与页面数（25 → 26）；补 `docker compose up --build` 真机实测记录 |
 
 ---
 
@@ -148,4 +162,7 @@ curl -I http://localhost:8080
 # 3. 静态资源是否齐全
 curl -o /dev/null -w "%{http_code}\n" http://localhost:8080/css/app.css
 curl -o /dev/null -w "%{http_code}\n" http://localhost:8080/js/app.js
+
+# 4. 自动走查（可选，需要 Node + Chrome；真实点击页面，57 项断言）
+cd tools && npm install && node walkthrough.js
 ```

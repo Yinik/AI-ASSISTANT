@@ -66,6 +66,13 @@ function E3_home(params) {
       <div class="card__title">女儿想改一件事的时间</div>
       <div class="card__meta">「${esc(Store.task(p.taskId).title)}」${esc(p.from)} → ${esc(p.to)}，要你点头 ›</div>
     </button>`;
+  } else if (Store.pendingRequest() && Store.pendingRequest().status === 'replied') {
+    const r = Store.pendingRequest();
+    const t = Store.task(r.taskId);
+    banner = `<button type="button" class="card card--ok" style="text-align:left" onclick="A('go','#/elder/reply/${esc(r.taskId)}')">
+      <div class="card__title">女儿已经回话了</div>
+      <div class="card__meta">「${esc(t.title)}」${esc(r.reply && r.reply.text || '')} ›</div>
+    </button>`;
   } else if (!Store.state.linked) {
     banner = `<div class="note note--warn">还没连上女儿。连上以后，你一个人搞不定的时候才能叫她。</div>`;
   }
@@ -110,6 +117,9 @@ function E4_task(id) {
         </div>
         ${req && req.status === 'waiting'
           ? `<div class="note note--info">已经告诉女儿了，正在等她回话。</div>` + btn('看看女儿回了没有', 'go', '#/elder/waiting/' + id, 'btn--ghost')
+          : ''}
+        ${req && req.status === 'replied'
+          ? `<div class="note note--ok">女儿已经回话了，点这里看她说了什么。</div>` + btn('看女儿的回话', 'go', '#/elder/reply/' + id, 'btn--ok')
           : ''}
         ${done ? '' : `
           ${btn('我做完了', 'go', '#/elder/confirm/' + id, 'btn--primary')}

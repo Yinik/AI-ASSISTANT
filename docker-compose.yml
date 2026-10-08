@@ -2,7 +2,8 @@ services:
   prototype:
     build: .
     image: anan-elder-prototype:1.0.0
-    container_name: anan-elder-prototype
+    # 刻意不写 container_name：固定容器名会让"从两个不同目录各跑一次"直接冲突
+    # （Error: Conflict. The container name ... is already in use），交给 compose 自动命名更稳。
     ports:
       # 宿主机端口:容器端口 —— 若 8080 被占用，把左边改成 8081 等即可
       - "8080:80"
